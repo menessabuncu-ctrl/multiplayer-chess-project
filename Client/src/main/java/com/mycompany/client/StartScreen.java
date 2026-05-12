@@ -7,6 +7,9 @@ import java.awt.*;
 // StartScreen oyunun ilk açılış ekranıdır.
 // Kullanıcı buradan server IP ve port bilgisi girerek oyuna bağlanır.
 public class StartScreen extends JFrame {
+    
+    // kullanıcı isminin girileceği alan.
+    private JTextField nameField;
 
     // Server IP adresinin girileceği alan.
     private JTextField hostField;
@@ -44,13 +47,18 @@ public class StartScreen extends JFrame {
         // IP ve port giriş alanlarının bulunduğu panel.
         JPanel formPanel = new JPanel();
         formPanel.setLayout(new GridLayout(4, 1, 8, 8));
+        
+        JLabel nameLabel = new JLabel("Name:");
+        nameField = new JTextField("enter your name");
 
         JLabel hostLabel = new JLabel("Server IP:");
-        hostField = new JTextField("localhost");
+        hostField = new JTextField("98.82.187.117");
 
         JLabel portLabel = new JLabel("Port:");
         portField = new JTextField("5000");
 
+        formPanel.add(nameLabel);
+        formPanel.add(nameField);
         formPanel.add(hostLabel);
         formPanel.add(hostField);
         formPanel.add(portLabel);
