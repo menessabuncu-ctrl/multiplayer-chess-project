@@ -1,5 +1,5 @@
 
-package com.mycompany.multiplayer.GameLogic;
+package com.mycompany.GameLogic;
 
 // Bir hamle denemesinin sonucunu temsil eder. Hamlenin başarılı ya da başarısız olması ve oyun durumu bilgisini taşır. 
 public class MoveResult {

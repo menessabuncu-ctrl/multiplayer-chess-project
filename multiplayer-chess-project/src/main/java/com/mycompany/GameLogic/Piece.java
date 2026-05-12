@@ -1,5 +1,5 @@
 
-package com.mycompany.multiplayer.GameLogic;
+package com.mycompany.GameLogic;
 
 public class Piece {
     public final PieceType type;

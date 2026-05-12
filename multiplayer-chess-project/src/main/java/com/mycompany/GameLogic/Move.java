@@ -1,5 +1,5 @@
 
-package com.mycompany.multiplayer.GameLogic;
+package com.mycompany.GameLogic;
 
 public class Move {
      public final int sx, sy, dx, dy; //Başlangıç ve hedef kare koordinatları.

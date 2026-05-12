@@ -1,5 +1,5 @@
 
-package com.mycompany.multiplayer.GameLogic;
+package com.mycompany.GameLogic;
 
 public enum GameStatus {
     WAITING,
