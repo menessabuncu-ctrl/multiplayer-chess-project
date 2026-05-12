@@ -1,4 +1,3 @@
-
 package com.mycompany.client;
 
 import com.mycompany.GameLogic.*;
@@ -8,218 +7,225 @@ import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 
-// GameFrame ana oyun penceresidir.
-// Tahta paneli, sıra bilgisi, oyuncu rengi ve oyun kontrol butonları burada bulunur.
 public class GameFrame extends JFrame {
-
-    // Server ile haberleşen client nesnesi.
     private final Client client;
+    private final PieceColor role;
+    private final JLabel statusLabel = new JLabel("Connecting...", SwingConstants.CENTER);
+    private final BoardPanel board;
+    private final JButton resignButton = new JButton("Resign");
+    private final JButton offerDrawButton = new JButton("Offer Draw");
+    private final JButton acceptDrawButton = new JButton("Accept Draw");
+    private final JButton declineDrawButton = new JButton("Decline Draw");
 
-    // Satranç tahtasını çizen panel.
-    private BoardPanel boardPanel;
+    private boolean endScreenShown = false;
+    private EndScreen endScreen;
 
-    // Durum mesajını gösteren label.
-    private JLabel statusLabel;
-
-    // Oyuncunun rengini gösteren label.
-    private JLabel colorLabel;
-
-    // Sıranın kimde olduğunu gösteren label.
-    private JLabel turnLabel;
-
-    // Pes etme butonu.
-    private JButton resignButton;
-
-    // Beraberlik teklif butonu.
-    private JButton drawButton;
-
-    // Yeniden başlatma butonu.
-    private JButton restartButton;
-
-    // Oyuncu rengi.
-    private PieceColor playerColor;
-
-    // Güncel sıra bilgisi.
-    private PieceColor currentTurn;
-
-    public GameFrame(Client client) {
+    public GameFrame(Client client, PieceColor role) {
         this.client = client;
-        initComponents();
-    }
+        this.role = role;
 
-    // GUI bileşenlerini oluşturur.
-    private void initComponents() {
-        setTitle("Network Chess");
-        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        setTitle("Chess - " + role);
         setSize(760, 700);
         setLocationRelativeTo(null);
-        setLayout(new BorderLayout());
+        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
 
-        // Pencere kapatılırken server'a QUIT mesajı gönderilir.
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
-                closeGame();
+                client.exitApplication();
             }
         });
 
-        // Üst bilgi paneli.
-        JPanel topPanel = new JPanel(new GridLayout(3, 1));
+        setLayout(new BorderLayout(8, 8));
 
-        colorLabel = new JLabel("Color: Waiting...", SwingConstants.CENTER);
-        colorLabel.setFont(new Font("Arial", Font.BOLD, 16));
+        statusLabel.setFont(new Font("Arial", Font.BOLD, 18));
+        statusLabel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        add(statusLabel, BorderLayout.NORTH);
 
-        turnLabel = new JLabel("Turn: Waiting...", SwingConstants.CENTER);
-        turnLabel.setFont(new Font("Arial", Font.PLAIN, 15));
+        board = new BoardPanel(client, role);
+        add(board, BorderLayout.CENTER);
 
-        statusLabel = new JLabel("Connecting to server...", SwingConstants.CENTER);
-        statusLabel.setFont(new Font("Arial", Font.PLAIN, 15));
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 8));
 
-        topPanel.add(colorLabel);
-        topPanel.add(turnLabel);
-        topPanel.add(statusLabel);
+        actions.add(resignButton);
+        actions.add(offerDrawButton);
+        actions.add(acceptDrawButton);
+        actions.add(declineDrawButton);
 
-        add(topPanel, BorderLayout.NORTH);
+        add(actions, BorderLayout.SOUTH);
 
-        // Tahta paneli.
-        boardPanel = new BoardPanel(this);
-        add(boardPanel, BorderLayout.CENTER);
+        resignButton.addActionListener(e -> {
+            int ok = JOptionPane.showConfirmDialog(
+                    this,
+                    "Resign the game?",
+                    "Confirm",
+                    JOptionPane.YES_NO_OPTION
+            );
 
-        // Alt kontrol paneli.
-        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 10));
+            if (ok == JOptionPane.YES_OPTION) {
+                client.resign();
+            }
+        });
 
-        resignButton = new JButton("Resign");
-        drawButton = new JButton("Offer Draw");
-        restartButton = new JButton("Restart");
+        offerDrawButton.addActionListener(e -> client.offerDraw());
+        acceptDrawButton.addActionListener(e -> client.acceptDraw());
+        declineDrawButton.addActionListener(e -> client.declineDraw());
 
-        resignButton.addActionListener(e -> resignGame());
-        drawButton.addActionListener(e -> offerDraw());
-        restartButton.addActionListener(e -> restartGame());
-
-        bottomPanel.add(resignButton);
-        bottomPanel.add(drawButton);
-        bottomPanel.add(restartButton);
-
-        add(bottomPanel, BorderLayout.SOUTH);
+        setVisible(true);
     }
 
-    // BoardPanel bir hamle seçtiğinde buraya gelir.
-    // Hamle client üzerinden server'a gönderilir.
-    public void sendMove(Move move) {
-        if (playerColor == null) {
-            updateStatus("Player color is not assigned yet.");
-            return;
+    public void receiveState(String stateMessage) {
+        String[] p = stateMessage.split("\\|", 8);
+
+        if (p.length < 8) {
+            throw new IllegalArgumentException("Incomplete STATE message");
         }
 
-        if (currentTurn != null && currentTurn != playerColor) {
-            updateStatus("It is not your turn.");
-            return;
+        PieceColor turn = PieceColor.valueOf(p[1]);
+        GameStatus status = GameStatus.valueOf(p[2]);
+        String winner = p[3];
+        String message = p[4];
+        String boardEncoded = p[7];
+
+        Piece[][] boardState = GameState.deserializeBoard(boardEncoded);
+
+        boolean myTurn = status == GameStatus.ACTIVE || status == GameStatus.CHECK;
+        myTurn = myTurn && turn == role;
+
+        statusLabel.setText(
+                "You are " + role
+                        + " | "
+                        + (myTurn ? "Your turn" : "Opponent's turn")
+                        + " | "
+                        + message
+        );
+
+        board.setState(boardState, turn, status, message);
+        updateActionButtons(status);
+
+        if (!isGameOver(status) && endScreenShown) {
+            closeEndScreenForReplay();
         }
 
-        client.sendMove(move);
-    }
+        if (isGameOver(status) && !endScreenShown) {
+            endScreenShown = true;
 
-    // Server'dan gelen güncel board bilgisini tahtaya aktarır.
-    public void updateBoard(Piece[][] board) {
-        boardPanel.setBoard(board);
-    }
+            String result = winner.equals("NONE")
+                    ? message
+                    : message + " Winner: " + winner;
 
-    // Server'dan gelen sıra bilgisini günceller.
-    public void updateTurn(PieceColor turn) {
-        this.currentTurn = turn;
-        turnLabel.setText("Turn: " + turn);
-
-        if (playerColor != null && turn == playerColor) {
-            statusLabel.setText("Your turn.");
+            endScreen = new EndScreen(result, client, this);
         }
     }
 
-    // Durum mesajını günceller.
-    public void updateStatus(String message) {
+    private boolean isGameOver(GameStatus status) {
+        return status == GameStatus.CHECKMATE
+                || status == GameStatus.STALEMATE
+                || status == GameStatus.DRAW
+                || status == GameStatus.RESIGNED
+                || status == GameStatus.DISCONNECTED;
+    }
+
+    private void updateActionButtons(GameStatus status) {
+        boolean active = !isGameOver(status);
+
+        resignButton.setEnabled(active);
+        offerDrawButton.setEnabled(active);
+        acceptDrawButton.setEnabled(active);
+        declineDrawButton.setEnabled(active);
+    }
+
+    public void receiveReplayOffer(String requester) {
+        if (endScreen != null) {
+            endScreen.setReplayOfferReceived();
+        }
+
+        int answer = JOptionPane.showConfirmDialog(
+                this,
+                requester + " wants to play again. Start a new game with the same opponent?",
+                "Replay Request",
+                JOptionPane.YES_NO_OPTION
+        );
+
+        if (answer == JOptionPane.YES_OPTION) {
+            client.acceptReplay();
+        } else {
+            client.declineReplay();
+        }
+    }
+
+    public void showReplayWaiting() {
+        if (endScreen != null) {
+            endScreen.setReplayWaiting();
+        }
+
+        statusLabel.setText("Replay request sent. Waiting for opponent...");
+    }
+
+    public void showReplayDeclined() {
+        if (endScreen != null) {
+            endScreen.setReplayDeclined();
+        }
+
+        JOptionPane.showMessageDialog(
+                this,
+                "Opponent declined the replay request.",
+                "Replay",
+                JOptionPane.INFORMATION_MESSAGE
+        );
+    }
+
+    public void showReplayUnavailable(String message) {
+        if (endScreen != null) {
+            endScreen.setReplayUnavailable();
+        }
+
+        JOptionPane.showMessageDialog(
+                this,
+                message,
+                "Replay Unavailable",
+                JOptionPane.WARNING_MESSAGE
+        );
+    }
+
+    public void startReplayFromServer() {
+        closeEndScreenForReplay();
+        statusLabel.setText("Replay started. New game is loading...");
+        setVisible(true);
+        toFront();
+    }
+
+    private void closeEndScreenForReplay() {
+        if (endScreen != null) {
+            endScreen.closeForReplay();
+            endScreen = null;
+        }
+
+        endScreenShown = false;
+    }
+
+    public void showConnectionError(String message) {
         statusLabel.setText(message);
-    }
+        board.setInteractionEnabled(false);
+        updateActionButtons(GameStatus.DISCONNECTED);
 
-    // Oyuncu rengini GUI'de gösterir.
-    public void setPlayerColor(PieceColor color) {
-        this.playerColor = color;
-        colorLabel.setText("You are: " + color);
-        boardPanel.setPlayerColor(color);
-    }
-
-    // Oyuncu pes etmek istediğinde çalışır.
-    private void resignGame() {
-        int result = JOptionPane.showConfirmDialog(
+        JOptionPane.showMessageDialog(
                 this,
-                "Are you sure you want to resign?",
-                "Resign",
-                JOptionPane.YES_NO_OPTION
+                message,
+                "Connection",
+                JOptionPane.ERROR_MESSAGE
         );
-
-        if (result == JOptionPane.YES_OPTION) {
-            client.sendResign();
-        }
     }
 
-    // Beraberlik teklif eder.
-    private void offerDraw() {
-        client.sendDrawOffer();
-        updateStatus("Draw offer sent.");
+    public boolean isEndScreenShown() {
+        return endScreenShown;
     }
 
-    // Oyunu yeniden başlatma isteği gönderir.
-    private void restartGame() {
-        int result = JOptionPane.showConfirmDialog(
-                this,
-                "Restart the game?",
-                "Restart",
-                JOptionPane.YES_NO_OPTION
-        );
-
-        if (result == JOptionPane.YES_OPTION) {
-            client.sendRestart();
-            setEnabled(true);
-        }
-    }
-
-    // Pencere kapatılırken client bağlantısını düzgün kapatır.
-    private void closeGame() {
-        int result = JOptionPane.showConfirmDialog(
-                this,
-                "Do you want to quit the game?",
-                "Quit",
-                JOptionPane.YES_NO_OPTION
-        );
-
-        if (result == JOptionPane.YES_OPTION) {
-            client.sendQuit();
-            client.disconnect();
-            dispose();
-            System.exit(0);
-        }
-    }
-
-    // EndScreen tarafından çağrılabilir.
-    // Oyuncuyu menüye döndürür.
-    public void backToMenu() {
-        client.disconnect();
+    public void closeFrame() {
         dispose();
-
-        SwingUtilities.invokeLater(() -> new StartScreen().setVisible(true));
     }
 
-    // EndScreen tarafından çağrılabilir.
-    // Oyunu tamamen kapatır.
     public void exitApplication() {
-        client.disconnect();
-        dispose();
-        System.exit(0);
-    }
-
-    public PieceColor getPlayerColor() {
-        return playerColor;
-    }
-
-    public PieceColor getCurrentTurn() {
-        return currentTurn;
+        client.exitApplication();
     }
 }

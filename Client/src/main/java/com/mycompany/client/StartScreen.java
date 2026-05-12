@@ -1,124 +1,77 @@
-
 package com.mycompany.client;
+
+import com.mycompany.GameLogic.*;
 
 import javax.swing.*;
 import java.awt.*;
 
-// StartScreen oyunun ilk açılış ekranıdır.
-// Kullanıcı buradan server IP ve port bilgisi girerek oyuna bağlanır.
 public class StartScreen extends JFrame {
-    
-    // kullanıcı isminin girileceği alan.
-    private JTextField nameField;
-
-    // Server IP adresinin girileceği alan.
-    private JTextField hostField;
-
-    // Server portunun girileceği alan.
-    private JTextField portField;
-
-    // Bağlanma butonu.
-    private JButton connectButton;
-
-    // Uygulama başlığını gösteren label.
-    private JLabel titleLabel;
 
     public StartScreen() {
-        initComponents();
-    }
 
-    // Arayüz bileşenlerini oluşturur ve pencereye ekler.
-    private void initComponents() {
-        setTitle("Network Chess - Start");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(400, 300);
+        setTitle("Multiplayer Chess");
+        setSize(500, 350);
         setLocationRelativeTo(null);
-        setResizable(false);
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
 
         JPanel mainPanel = new JPanel();
         mainPanel.setLayout(new BorderLayout());
-        mainPanel.setBorder(BorderFactory.createEmptyBorder(25, 25, 25, 25));
+        mainPanel.setBackground(new Color(40, 40, 40));
 
-        // Başlık alanı.
-        titleLabel = new JLabel("Network Chess", SwingConstants.CENTER);
-        titleLabel.setFont(new Font("Arial", Font.BOLD, 28));
-        mainPanel.add(titleLabel, BorderLayout.NORTH);
+        JLabel title = new JLabel("MULTIPLAYER CHESS", SwingConstants.CENTER);
+        title.setForeground(Color.WHITE);
+        title.setFont(new Font("Arial", Font.BOLD, 32));
 
-        // IP ve port giriş alanlarının bulunduğu panel.
-        JPanel formPanel = new JPanel();
-        formPanel.setLayout(new GridLayout(4, 1, 8, 8));
-        
-        JLabel nameLabel = new JLabel("Name:");
-        nameField = new JTextField("enter your name");
+        JLabel subtitle = new JLabel("Socket Programming Chess Game", SwingConstants.CENTER);
+        subtitle.setForeground(new Color(210, 210, 210));
+        subtitle.setFont(new Font("Arial", Font.PLAIN, 16));
 
-        JLabel hostLabel = new JLabel("Server IP:");
-        hostField = new JTextField("98.82.187.117");
+        JPanel topPanel = new JPanel(new GridLayout(2, 1));
+        topPanel.setBackground(new Color(40, 40, 40));
+        topPanel.add(title);
+        topPanel.add(subtitle);
 
-        JLabel portLabel = new JLabel("Port:");
-        portField = new JTextField("5000");
+        JPanel centerPanel = new JPanel();
+        centerPanel.setBackground(new Color(40, 40, 40));
+        centerPanel.setLayout(new GridLayout(3, 1, 10, 10));
 
-        formPanel.add(nameLabel);
-        formPanel.add(nameField);
-        formPanel.add(hostLabel);
-        formPanel.add(hostField);
-        formPanel.add(portLabel);
-        formPanel.add(portField);
+        JLabel ipLabel = new JLabel("Server IP Address", SwingConstants.CENTER);
+        ipLabel.setForeground(Color.WHITE);
+        ipLabel.setFont(new Font("Arial", Font.BOLD, 18));
 
-        mainPanel.add(formPanel, BorderLayout.CENTER);
+        JTextField ipField = new JTextField("98.82.187.117");
+        ipField.setHorizontalAlignment(SwingConstants.CENTER);
+        ipField.setFont(new Font("Arial", Font.PLAIN, 18));
 
-        // Buton paneli.
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        connectButton = new JButton("Connect");
-        connectButton.setFocusPainted(false);
+        JButton startButton = new JButton("START GAME");
+        startButton.setFont(new Font("Arial", Font.BOLD, 20));
+        startButton.setBackground(new Color(70, 130, 180));
+        startButton.setForeground(Color.WHITE);
+        startButton.setFocusPainted(false);
 
-        // Connect butonuna basıldığında server'a bağlanma denenir.
-        connectButton.addActionListener(e -> connectToServer());
+        startButton.addActionListener(e -> {
+            try {
+                new Client(ipField.getText());
+                dispose();
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Connection Failed");
+            }
+        });
 
-        buttonPanel.add(connectButton);
-        mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+        centerPanel.add(ipLabel);
+        centerPanel.add(ipField);
+        centerPanel.add(startButton);
+
+        JLabel footer = new JLabel("Software Engineering Chess Project", SwingConstants.CENTER);
+        footer.setForeground(new Color(170, 170, 170));
+        footer.setFont(new Font("Arial", Font.PLAIN, 14));
+
+        mainPanel.add(topPanel, BorderLayout.NORTH);
+        mainPanel.add(centerPanel, BorderLayout.CENTER);
+        mainPanel.add(footer, BorderLayout.SOUTH);
 
         add(mainPanel);
-    }
 
-    // Kullanıcının girdiği IP ve port ile server'a bağlanır.
-    private void connectToServer() {
-        String host = hostField.getText().trim();
-        String portText = portField.getText().trim();
-
-        if (host.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Server IP cannot be empty.");
-            return;
-        }
-
-        int port;
-
-        try {
-            port = Integer.parseInt(portText);
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this, "Port must be a number.");
-            return;
-        }
-
-        connectButton.setEnabled(false);
-        connectButton.setText("Connecting...");
-
-        // Bağlantı denemesi GUI donmasın diye ayrı thread'de yapılır.
-        new Thread(() -> {
-            Client client = new Client();
-            boolean connected = client.connect(host, port);
-
-            SwingUtilities.invokeLater(() -> {
-                if (connected) {
-                    GameFrame gameFrame = new GameFrame(client);
-                    client.setGameFrame(gameFrame);
-
-                    gameFrame.setVisible(true);
-                    dispose();
-                } else {
-                    connectButton.setEnabled(true);
-                    connectButton.setText("Connect");
-                }
-            });
-        }).start();
+        setVisible(true);
     }
 }

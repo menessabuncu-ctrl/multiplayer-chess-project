@@ -1,379 +1,210 @@
-
 package com.mycompany.client;
 
 import com.mycompany.GameLogic.*;
+
 import javax.swing.*;
 import java.io.*;
 import java.net.*;
 
-// Client class'ı oyuncunun server'a bağlanmasını sağlar.
-// Server'dan gelen mesajları dinler ve GUI tarafına aktarır.
-// Oyuncunun yaptığı hamleleri de server'a gönderir.
 public class Client {
-
-    // Server bağlantısı için socket.
     private Socket socket;
-
-    // Server'dan mesaj okumak için kullanılır.
-    private BufferedReader in;
-
-    // Server'a mesaj göndermek için kullanılır.
-    private PrintWriter out;
-
-    // Client bağlantısı açık mı bilgisini tutar.
-    private volatile boolean connected = false;
-
-    // Oyuncunun rengi.
-    // Server bağlantıdan sonra COLOR mesajı ile belirler.
-    private PieceColor playerColor;
-
-    // Client tarafında görünen güncel tahta.
-    // Asıl oyun durumu server'dadır, bu sadece görüntüleme için kullanılır.
-    private Piece[][] board;
-
-    // Server'dan gelen güncel sıra bilgisi.
-    private PieceColor turn;
-
-    // Server'dan gelen güncel oyun durumu.
-    private GameStatus status;
-
-    // Server'dan gelen durum mesajı.
-    private String statusMessage;
-
-    // Oyun bittiyse kazanan oyuncu.
-    private PieceColor winner;
-
-    // GUI ekranı.
+    private DataInputStream in;
+    private DataOutputStream out;
     private GameFrame gameFrame;
+    private PieceColor role;
+    private volatile boolean closing = false;
 
-    // Client uygulamasının başlangıç noktası.
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new StartScreen().setVisible(true));
+    public Client(String ip) throws IOException {
+        socket = new Socket(ip, 5000);
+        socket.setKeepAlive(true);
+        in = new DataInputStream(socket.getInputStream());
+        out = new DataOutputStream(socket.getOutputStream());
+
+        String roleMessage = in.readUTF();
+
+        if (!roleMessage.startsWith("ROLE|")) {
+            throw new IOException("Server did not assign a role");
+        }
+
+        role = PieceColor.valueOf(roleMessage.split("\\|")[1]);
+
+        SwingUtilities.invokeLater(() -> gameFrame = new GameFrame(this, role));
+
+        Thread listener = new Thread(this::listen, "client-listener");
+        listener.setDaemon(true);
+        listener.start();
     }
 
-    // Server'a bağlanır.
-    public boolean connect(String host, int port) {
+    private void listen() {
         try {
-            socket = new Socket(host, port);
+            while (!closing && socket != null && !socket.isClosed()) {
+                String message = in.readUTF();
+                SwingUtilities.invokeLater(() -> handleServerMessage(message));
+            }
+        } catch (EOFException | SocketException e) {
+            if (closing || socket == null || socket.isClosed()) {
+                return;
+            }
 
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            out = new PrintWriter(socket.getOutputStream(), true);
+            System.err.println("Connection closed unexpectedly: " + e.getMessage());
 
-            connected = true;
+            SwingUtilities.invokeLater(() -> {
+                if (gameFrame != null && !gameFrame.isEndScreenShown()) {
+                    gameFrame.showConnectionError("Connection lost: " + e.getMessage());
+                }
+            });
+        } catch (Exception e) {
+            if (closing) {
+                return;
+            }
 
-            // Server'dan gelen mesajları ayrı thread üzerinde dinler.
-            Thread listenerThread = new Thread(this::listenToServer);
-            listenerThread.start();
+            System.err.println("Connection listener failed: " + e.getMessage());
+            e.printStackTrace();
 
-            return true;
+            SwingUtilities.invokeLater(() -> {
+                if (gameFrame != null && !gameFrame.isEndScreenShown()) {
+                    gameFrame.showConnectionError("Connection lost: " + e.getMessage());
+                }
+            });
+        }
+    }
 
-        } catch (IOException e) {
+    private void handleServerMessage(String message) {
+        if (gameFrame == null) {
+            return;
+        }
+
+        try {
+            if (message.startsWith("STATE|")) {
+                gameFrame.receiveState(message);
+
+            } else if (message.startsWith("ERROR|")) {
+                JOptionPane.showMessageDialog(
+                        gameFrame,
+                        message.substring("ERROR|".length()),
+                        "Server rejected action",
+                        JOptionPane.WARNING_MESSAGE
+                );
+
+            } else if (message.startsWith("REPLAY_OFFER|")) {
+                String requester = message.substring("REPLAY_OFFER|".length());
+                gameFrame.receiveReplayOffer(requester);
+
+            } else if (message.equals("REPLAY_WAITING")) {
+                gameFrame.showReplayWaiting();
+
+            } else if (message.equals("REPLAY_DECLINED")) {
+                gameFrame.showReplayDeclined();
+
+            } else if (message.startsWith("REPLAY_UNAVAILABLE|")) {
+                gameFrame.showReplayUnavailable(message.substring("REPLAY_UNAVAILABLE|".length()));
+
+            } else if (message.equals("REPLAY_START")) {
+                gameFrame.startReplayFromServer();
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to process server message: " + message);
+            e.printStackTrace();
+
             JOptionPane.showMessageDialog(
-                    null,
-                    "Could not connect to server: " + e.getMessage(),
-                    "Connection Error",
+                    gameFrame,
+                    "Invalid server message: " + e.getMessage(),
+                    "Protocol Error",
                     JOptionPane.ERROR_MESSAGE
             );
-
-            return false;
         }
     }
 
-    // Server'dan gelen mesajları sürekli dinler.
-    private void listenToServer() {
+    public PieceColor getRole() {
+        return role;
+    }
+
+    public synchronized void send(String message) {
         try {
-            String message;
-
-            while (connected && (message = in.readLine()) != null) {
-                handleServerMessage(message);
+            if (closing) {
+                return;
             }
 
-        } catch (IOException e) {
-            if (connected) {
-                showInfo("Connection lost: " + e.getMessage());
+            if (socket == null || socket.isClosed()) {
+                throw new IOException("Socket is closed");
             }
-        } finally {
-            disconnect();
-        }
-    }
 
-    // Server'dan gelen mesajları komut türüne göre işler.
-    private void handleServerMessage(String message) {
-        if (message == null || message.isBlank()) {
-            return;
-        }
-
-        System.out.println("SERVER -> " + message);
-
-        String[] parts = message.split("\\|", -1);
-
-        switch (parts[0]) {
-            case "COLOR" -> handleColor(parts);
-            case "STATE" -> handleState(parts);
-            case "INFO" -> handleInfo(parts);
-            case "ERROR" -> handleError(parts);
-            case "DRAW_OFFER" -> handleDrawOffer(parts);
-            case "GAME_OVER" -> handleGameOver(parts);
-            default -> System.out.println("Unknown server message: " + message);
-        }
-    }
-
-    // Server'ın gönderdiği oyuncu rengini kaydeder.
-    private void handleColor(String[] parts) {
-        if (parts.length < 2) {
-            return;
-        }
-
-        playerColor = PieceColor.valueOf(parts[1]);
-
-        SwingUtilities.invokeLater(() -> {
-            if (gameFrame != null) {
-                gameFrame.setPlayerColor(playerColor);
-                gameFrame.updateStatus("You are " + playerColor);
-            }
-        });
-    }
-
-    // Server'ın gönderdiği güncel oyun durumunu işler.
-    private void handleState(String[] parts) {
-        // STATE|turn|status|winner|message|halfMoveClock|fullMoveNumber|board
-        if (parts.length < 8) {
-            return;
-        }
-
-        try {
-            turn = PieceColor.valueOf(parts[1]);
-            status = GameStatus.valueOf(parts[2]);
-
-            winner = "NONE".equals(parts[3]) ? null : PieceColor.valueOf(parts[3]);
-            statusMessage = parts[4];
-
-            String boardString = parts[7];
-            board = GameState.deserializeBoard(boardString);
-
-            SwingUtilities.invokeLater(() -> {
-                if (gameFrame != null) {
-                    gameFrame.updateBoard(board);
-                    gameFrame.updateTurn(turn);
-                    gameFrame.updateStatus(statusMessage);
-                }
-            });
+            out.writeUTF(message);
+            out.flush();
 
         } catch (Exception e) {
-            System.out.println("Invalid STATE message: " + e.getMessage());
-        }
-    }
+            System.err.println("Send failed: " + e.getMessage());
+            e.printStackTrace();
 
-    // Server'ın gönderdiği bilgi mesajını GUI'de gösterir.
-    private void handleInfo(String[] parts) {
-        if (parts.length < 2) {
-            return;
-        }
-
-        String msg = parts[1];
-
-        SwingUtilities.invokeLater(() -> {
             if (gameFrame != null) {
-                gameFrame.updateStatus(msg);
+                JOptionPane.showMessageDialog(
+                        gameFrame,
+                        "Send failed: " + e.getMessage(),
+                        "Network Error",
+                        JOptionPane.ERROR_MESSAGE
+                );
             }
-        });
+        }
     }
 
-    // Server'ın gönderdiği hata mesajını kullanıcıya gösterir.
-    private void handleError(String[] parts) {
-        if (parts.length < 2) {
-            return;
-        }
-
-        String msg = parts[1];
-
-        SwingUtilities.invokeLater(() -> {
-            if (gameFrame != null) {
-                gameFrame.updateStatus(msg);
-            }
-
-            JOptionPane.showMessageDialog(
-                    gameFrame,
-                    msg,
-                    "Move Error",
-                    JOptionPane.WARNING_MESSAGE
-            );
-        });
-    }
-
-    // Rakip beraberlik teklif ettiğinde kullanıcıya sorar.
-    private void handleDrawOffer(String[] parts) {
-        // DRAW_OFFER|color|message
-        if (parts.length < 3) {
-            return;
-        }
-
-        PieceColor offerBy = PieceColor.valueOf(parts[1]);
-        String msg = parts[2];
-
-        // Oyuncu kendi teklifini tekrar cevaplamaz.
-        if (offerBy == playerColor) {
-            SwingUtilities.invokeLater(() -> {
-                if (gameFrame != null) {
-                    gameFrame.updateStatus(msg);
-                }
-            });
-            return;
-        }
-
-        SwingUtilities.invokeLater(() -> {
-            int result = JOptionPane.showConfirmDialog(
-                    gameFrame,
-                    offerBy + " offered a draw. Accept?",
-                    "Draw Offer",
-                    JOptionPane.YES_NO_OPTION
-            );
-
-            if (result == JOptionPane.YES_OPTION) {
-                sendDrawAccept();
-            } else {
-                sendDrawDecline();
-            }
-        });
-    }
-
-    // Oyun bittiğinde EndScreen ekranını açar.
-    private void handleGameOver(String[] parts) {
-        // GAME_OVER|status|winner|message
-        if (parts.length < 4) {
-            return;
-        }
-
-        GameStatus finalStatus = GameStatus.valueOf(parts[1]);
-        PieceColor finalWinner = "NONE".equals(parts[2]) ? null : PieceColor.valueOf(parts[2]);
-        String message = parts[3];
-
-        SwingUtilities.invokeLater(() -> {
-            if (gameFrame != null) {
-                gameFrame.updateStatus(message);
-                gameFrame.setEnabled(false);
-            }
-
-            EndScreen endScreen = new EndScreen(this, finalStatus, finalWinner, message);
-            endScreen.setVisible(true);
-        });
-    }
-
-    // Hamleyi server'a gönderir.
     public void sendMove(Move move) {
-        if (!connected || out == null) {
-            showInfo("Not connected to server.");
-            return;
-        }
-
-        if (move.promotion == null) {
-            send("MOVE|" + move.sx + "|" + move.sy + "|" + move.dx + "|" + move.dy);
-        } else {
-            send("MOVE|" + move.sx + "|" + move.sy + "|" + move.dx + "|" + move.dy + "|" + move.promotion);
-        }
+        send("MOVE|" + move.sx + "|" + move.sy + "|" + move.dx + "|" + move.dy + "|" + (move.promotion == null ? "" : move.promotion.name()));
     }
 
-    // Server'a pes etme mesajı gönderir.
-    public void sendResign() {
+    public void resign() {
         send("RESIGN");
     }
 
-    // Server'a beraberlik teklifi gönderir.
-    public void sendDrawOffer() {
+    public void offerDraw() {
         send("DRAW_OFFER");
     }
 
-    // Server'a beraberlik kabul mesajı gönderir.
-    public void sendDrawAccept() {
+    public void acceptDraw() {
         send("DRAW_ACCEPT");
     }
 
-    // Server'a beraberlik reddetme mesajı gönderir.
-    public void sendDrawDecline() {
+    public void declineDraw() {
         send("DRAW_DECLINE");
     }
 
-    // Server'a oyunu yeniden başlatma mesajı gönderir.
-    public void sendRestart() {
-        send("RESTART");
+    public void requestReplay() {
+        send("REPLAY_REQUEST");
     }
 
-    // Server'a çıkış mesajı gönderir.
-    public void sendQuit() {
-        send("QUIT");
+    public void acceptReplay() {
+        send("REPLAY_ACCEPT");
     }
 
-    // Genel mesaj gönderme methodu.
-    private void send(String message) {
-        if (connected && out != null) {
-            out.println(message);
-        }
+    public void declineReplay() {
+        send("REPLAY_DECLINE");
     }
 
-    // Client bağlantısını kapatır.
-    public void disconnect() {
-        connected = false;
+    public void closeConnection() {
+        closing = true;
 
         try {
-            if (out != null) {
-                out.close();
-            }
+            if (in != null) in.close();
+        } catch (Exception ignored) {
+        }
 
-            if (in != null) {
-                in.close();
-            }
+        try {
+            if (out != null) out.close();
+        } catch (Exception ignored) {
+        }
 
-            if (socket != null && !socket.isClosed()) {
-                socket.close();
-            }
-
-        } catch (IOException e) {
-            System.out.println("Error while disconnecting: " + e.getMessage());
+        try {
+            if (socket != null && !socket.isClosed()) socket.close();
+        } catch (Exception e) {
+            System.err.println("Close failed: " + e.getMessage());
         }
     }
 
-    // Bilgi mesajını GUI'de veya dialog olarak gösterir.
-    private void showInfo(String message) {
-        SwingUtilities.invokeLater(() -> {
-            if (gameFrame != null) {
-                gameFrame.updateStatus(message);
-            } else {
-                JOptionPane.showMessageDialog(null, message);
-            }
-        });
+    public void exitApplication() {
+        closeConnection();
+        System.exit(0);
     }
 
-    // GameFrame bağlantısını Client içine verir.
-    public void setGameFrame(GameFrame gameFrame) {
-        this.gameFrame = gameFrame;
-    }
-
-    // Getter methodları.
-    public boolean isConnected() {
-        return connected;
-    }
-
-    public PieceColor getPlayerColor() {
-        return playerColor;
-    }
-
-    public Piece[][] getBoard() {
-        return board;
-    }
-
-    public PieceColor getTurn() {
-        return turn;
-    }
-
-    public GameStatus getStatus() {
-        return status;
-    }
-
-    public String getStatusMessage() {
-        return statusMessage;
-    }
-
-    public PieceColor getWinner() {
-        return winner;
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(StartScreen::new);
     }
 }
