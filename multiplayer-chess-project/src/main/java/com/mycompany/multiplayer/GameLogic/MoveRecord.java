@@ -1,5 +1,5 @@
 
-package com.mycompany.multiplayer.chess.project;
+package com.mycompany.multiplayer.GameLogic;
 
 // Yapılmış bir hamlenin geçmiş kaydını tutar.
 // Hamle geçmişi; en passant, beraberlik kuralları veya oyun analizi için kullanılabilir.
