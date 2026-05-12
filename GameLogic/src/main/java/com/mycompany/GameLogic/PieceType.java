@@ -1,4 +1,3 @@
-
 package com.mycompany.GameLogic;
 
 public enum PieceType {
