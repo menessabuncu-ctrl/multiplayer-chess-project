@@ -42,17 +42,24 @@ public class Client {
                 SwingUtilities.invokeLater(() -> handleServerMessage(message));
             }
         } catch (EOFException | SocketException e) {
-            if (closing || socket == null || socket.isClosed()) {
-                return;
-            }
+    if (closing || socket == null || socket.isClosed()) {
+        return;
+    }
 
-            System.err.println("Connection closed unexpectedly: " + e.getMessage());
+    System.err.println("Connection closed unexpectedly: " + e.getMessage());
 
             SwingUtilities.invokeLater(() -> {
-                if (gameFrame != null && !gameFrame.isEndScreenShown()) {
-                    gameFrame.showConnectionError("Connection lost: " + e.getMessage());
+                if (gameFrame != null) {
+                    if (gameFrame.isEndScreenShown()) {
+                        gameFrame.disableReplayBecauseOpponentLeft(
+                                "Opponent left the session. Replay is no longer available."
+                        );
+                    } else {
+                        gameFrame.showConnectionError("Connection lost: " + e.getMessage());
+                    }
                 }
             });
+
         } catch (Exception e) {
             if (closing) {
                 return;
@@ -62,8 +69,14 @@ public class Client {
             e.printStackTrace();
 
             SwingUtilities.invokeLater(() -> {
-                if (gameFrame != null && !gameFrame.isEndScreenShown()) {
-                    gameFrame.showConnectionError("Connection lost: " + e.getMessage());
+                if (gameFrame != null) {
+                    if (gameFrame.isEndScreenShown()) {
+                        gameFrame.disableReplayBecauseOpponentLeft(
+                                "Opponent left the session. Replay is no longer available."
+                        );
+                    } else {
+                        gameFrame.showConnectionError("Connection lost: " + e.getMessage());
+                    }
                 }
             });
         }

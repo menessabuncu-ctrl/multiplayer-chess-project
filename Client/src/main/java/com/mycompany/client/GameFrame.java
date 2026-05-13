@@ -188,6 +188,17 @@ public class GameFrame extends JFrame {
         );
     }
 
+    public void disableReplayBecauseOpponentLeft(String message) {
+        statusLabel.setText(message);
+
+        if (endScreen != null) {
+            endScreen.setReplayUnavailable();
+        }
+
+        board.setInteractionEnabled(false);
+        updateActionButtons(GameStatus.DISCONNECTED);
+    }
+
     public void startReplayFromServer() {
         closeEndScreenForReplay();
         statusLabel.setText("Replay started. New game is loading...");
