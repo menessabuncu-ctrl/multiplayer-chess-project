@@ -1,5 +1,6 @@
 package com.mycompany.GameLogic;
 
+// Hamle denemesinin başarılı olup olmadığını ve mesajını taşır.
 public class MoveResult {
     public final boolean success;
     public final String message;

@@ -1,5 +1,6 @@
 package com.mycompany.GameLogic;
 
+// Taşın türünü, rengini ve daha önce hareket edip etmediğini tutar.
 public class Piece {
     public final PieceType type;
     public final PieceColor color;
@@ -15,6 +16,7 @@ public class Piece {
         this.moved = moved;
     }
 
+    // Board kopyalanırken taşın bağımsız bir kopyasını üretir.
     public Piece copy() {
         return new Piece(type, color, moved);
     }

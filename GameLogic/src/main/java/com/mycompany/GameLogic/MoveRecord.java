@@ -1,5 +1,6 @@
 package com.mycompany.GameLogic;
 
+// Uygulanan hamlenin özel durumlarla birlikte geçmiş kaydını tutar.
 public class MoveRecord {
     public final Move move;
     public final Piece movedPiece;

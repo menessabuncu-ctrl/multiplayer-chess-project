@@ -2,7 +2,9 @@ package com.mycompany.GameLogic;
 
 import java.util.*;
 
+// Satranç kurallarını, tahta durumunu ve oyun sonucunu yöneten ana logic sınıfı.
 public class GameState {
+    // Oyun boyunca kullanılan güncel tahta dizisi.
     private Piece[][] board;
     private PieceColor turn;
     private GameStatus status;
@@ -11,6 +13,7 @@ public class GameState {
     private MoveRecord lastMove;
     private int halfMoveClock;
     private int fullMoveNumber;
+    // Yapılan hamleleri özel durum kontrolleri için saklar.
     private final List<MoveRecord> history = new ArrayList<>();
     private final Map<String, Integer> positionCounts = new HashMap<>();
     private PieceColor drawOfferBy;
@@ -19,6 +22,7 @@ public class GameState {
         reset();
     }
 
+    // Yeni oyun veya replay için tüm oyun durumunu başlangıca alır.
     public final void reset() {
         board = initialBoard();
         turn = PieceColor.WHITE;
@@ -34,6 +38,7 @@ public class GameState {
         rememberPosition();
     }
 
+    // Standart satranç başlangıç dizilimini oluşturur.
     public static Piece[][] initialBoard() {
         Piece[][] b = new Piece[8][8];
         for (int i = 0; i < 8; i++) {
@@ -59,6 +64,7 @@ public class GameState {
         return b;
     }
 
+    // Serverdan gelen hamleyi doğrular, uygular ve sonucu döndürür.
     public synchronized MoveResult playMove(Move move, PieceColor player) {
         if (isGameOver()) return MoveResult.fail("Game is already over");
         if (player != turn) return MoveResult.fail("It is not your turn");
@@ -118,6 +124,7 @@ public class GameState {
         }
     }
 
+    // Hamleden sonra şah, mat, pat ve beraberlik durumlarını kontrol eder.
     private void updateGameStatusAfterMove(PieceColor mover, PieceColor next) {
         boolean check = isKingInCheck(board, next);
         boolean anyMove = hasAnyLegalMove(board, next, lastMove);
@@ -170,6 +177,7 @@ public class GameState {
     public synchronized PieceColor getWinner() { return winner; }
     public synchronized List<MoveRecord> getHistoryCopy() { return new ArrayList<>(history); }
 
+    // Güncel oyun durumunu clientlara gönderilecek protokol mesajına çevirir.
     public synchronized String toStateMessage() {
         return "STATE|" + turn + "|" + status + "|" + (winner == null ? "NONE" : winner)
                 + "|" + escape(statusMessage) + "|" + halfMoveClock + "|" + fullMoveNumber + "|" + serializeBoard();
@@ -177,6 +185,7 @@ public class GameState {
 
     public static String escape(String s) { return s == null ? "" : s.replace("|", "/"); }
 
+    // Tahtayı kısa bir metin formatına dönüştürür.
     public synchronized String serializeBoard() {
         StringBuilder sb = new StringBuilder(64);
         for (int y = 0; y < 8; y++) {
@@ -185,6 +194,7 @@ public class GameState {
         return sb.toString();
     }
 
+    // Protokol mesajındaki tahta bilgisini tekrar Piece dizisine çevirir.
     public static Piece[][] deserializeBoard(String encoded) {
         if (encoded == null || encoded.length() != 64) throw new IllegalArgumentException("Invalid board state");
         Piece[][] b = new Piece[8][8];
@@ -210,6 +220,7 @@ public class GameState {
         }, color, true);
     }
 
+    // Hamlenin hem taş kuralına hem de şah güvenliğine uygun olup olmadığını kontrol eder.
     public static boolean isLegalMove(Piece[][] b, Move m, PieceColor player, MoveRecord last) {
         if (!isBasicMoveValid(b, m, player, last)) return false;
         Piece[][] test = cloneBoard(b);
@@ -217,6 +228,7 @@ public class GameState {
         return !isKingInCheck(test, player);
     }
 
+    // Şah güvenliği hariç temel taş hareket kurallarını kontrol eder.
     public static boolean isBasicMoveValid(Piece[][] b, Move m, PieceColor player, MoveRecord last) {
         if (b == null || !m.isInsideBoard()) return false;
         if (m.sx == m.dx && m.sy == m.dy) return false;
@@ -241,6 +253,7 @@ public class GameState {
         };
     }
 
+    // Piyonun normal ilerleme, çapraz yeme ve en passant kurallarını kontrol eder.
     private static boolean pawnMoveValid(Piece[][] b, Move m, PieceColor player, MoveRecord last, int dx, int dy, int dir, Piece target) {
         if (dx == 0 && dy == dir && target == null) return true;
         int startRank = player == PieceColor.WHITE ? 6 : 1;
@@ -258,6 +271,7 @@ public class GameState {
                 && Math.abs(last.move.dy - last.move.sy) == 2;
     }
 
+    // Rok için taşların hareket etmemiş olmasını ve yolun güvenli olmasını kontrol eder.
     private static boolean castlingValid(Piece[][] b, Move m, PieceColor player) {
         Piece king = b[m.sy][m.sx];
         if (king == null || king.type != PieceType.KING || king.moved || m.sy != m.dy || Math.abs(m.dx - m.sx) != 2) return false;
@@ -271,6 +285,7 @@ public class GameState {
         return !isSquareAttacked(b, m.sx + 2 * step, m.sy, player.opposite());
     }
 
+    // Hamleyi board üzerinde uygular ve hamle kaydı üretir.
     private static MoveRecord applyMoveInternal(Piece[][] b, Move m, boolean mutateMovedFlag) {
         Piece moving = b[m.sy][m.sx];
         Piece captured = b[m.dy][m.dx];
@@ -318,6 +333,7 @@ public class GameState {
         return true;
     }
 
+    // Belirtilen rengin şahının saldırı altında olup olmadığını hesaplar.
     public static boolean isKingInCheck(Piece[][] b, PieceColor color) {
         int[] king = findKing(b, color);
         return king == null || isSquareAttacked(b, king[0], king[1], color.opposite());
@@ -359,6 +375,7 @@ public class GameState {
         return copy;
     }
 
+    // Oyuncunun en az bir yasal hamlesi olup olmadığını arar.
     public static boolean hasAnyLegalMove(Piece[][] b, PieceColor player, MoveRecord last) {
         for (int sy = 0; sy < 8; sy++) for (int sx = 0; sx < 8; sx++) {
             Piece p = b[sy][sx];
@@ -372,6 +389,7 @@ public class GameState {
         return false;
     }
 
+    // Tahta üzerindeki taş sayısına göre yetersiz materyal beraberliğini kontrol eder.
     private boolean hasInsufficientMaterial() {
         List<Piece> pieces = new ArrayList<>();
         for (Piece[] row : board) for (Piece p : row) if (p != null) pieces.add(p);

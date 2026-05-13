@@ -1,5 +1,6 @@
 package com.mycompany.GameLogic;
 
+// Bir satranç hamlesinin başlangıç, hedef ve terfi bilgisini tutar.
 public class Move {
     public final int sx, sy, dx, dy;
     public final PieceType promotion;
@@ -8,6 +9,7 @@ public class Move {
         this(sx, sy, dx, dy, null);
     }
 
+    // Hamle koordinatlarını ve varsa piyon terfisini kaydeder.
     public Move(int sx, int sy, int dx, int dy, PieceType promotion) {
         this.sx = sx;
         this.sy = sy;
@@ -29,6 +31,7 @@ public class Move {
         return sx + "," + sy + "," + dx + "," + dy + (promotion == null ? "" : "," + promotion.name());
     }
 
+    // Clienttan gelen MOVE protokol parçalarını Move nesnesine dönüştürür.
     public static Move fromProtocol(String[] parts) {
         if (parts.length < 5 || !"MOVE".equals(parts[0])) {
             throw new IllegalArgumentException("Invalid MOVE message format");
