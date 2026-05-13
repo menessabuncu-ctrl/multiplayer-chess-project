@@ -5,10 +5,13 @@ import com.mycompany.GameLogic.*;
 import java.io.*;
 import java.net.*;
 
+// İki clientı eşleştirip her oyun için ayrı GameSession başlatan server sınıfı.
 public class Server {
+    // Clientların bağlanacağı TCP portu.
     private static final int PORT = 5000;
     private static int nextSessionId = 1;
 
+    // Server socketini açar ve gelen oyuncuları ikili oturumlara ayırır.
     public static void main(String[] args) {
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             System.out.println("Server started on port " + PORT + "...");
@@ -39,6 +42,7 @@ public class Server {
         }
     }
 
+    // Bir beyaz ve bir siyah oyuncudan oluşan bağımsız oyun oturumu.
     private static class GameSession implements Runnable {
 
         private final int sessionId;
@@ -49,6 +53,7 @@ public class Server {
         private volatile boolean running = true;
         private PieceColor replayRequestedBy = null;
 
+        // Oyuncu socketlerini renklerine göre PlayerConnection nesnelerine bağlar.
         GameSession(int sessionId, Socket whiteSocket, Socket blackSocket) throws IOException {
             this.sessionId = sessionId;
             white = new PlayerConnection(whiteSocket, PieceColor.WHITE);
@@ -56,6 +61,7 @@ public class Server {
         }
 
         @Override
+        // Rolleri gönderir, oyun durumunu yayınlar ve iki dinleyici threadini başlatır.
         public void run() {
             try {
                 white.send("ROLE|WHITE");
@@ -81,6 +87,7 @@ public class Server {
             }
         }
 
+        // Tek bir oyuncudan gelen mesajları oturum kapanana kadar okur.
         private void listen(PlayerConnection player) {
             try {
                 while (running) {
@@ -96,6 +103,7 @@ public class Server {
             }
         }
 
+        // Client komutlarını ayrıştırır ve ilgili oyun işlemini uygular.
         private synchronized void handleMessage(PlayerConnection player, String message) {
             try {
                 String[] parts = message.split("\\|");
@@ -178,6 +186,7 @@ public class Server {
             }
         }
 
+        // Oyun bittikten sonra gelen replay isteğini yönetir.
         private void handleReplayRequest(PlayerConnection player) {
             if (!game.isGameOver()) {
                 player.send("ERROR|Replay can only be requested after the game is over");
@@ -199,6 +208,7 @@ public class Server {
             startReplay();
         }
 
+        // Karşı taraf replay kabul ettiğinde yeni oyunu başlatır.
         private void handleReplayAccept(PlayerConnection player) {
             if (!game.isGameOver()) {
                 player.send("ERROR|Replay can only be accepted after the game is over");
@@ -239,6 +249,7 @@ public class Server {
             broadcastState();
         }
 
+        // Bir oyuncu ayrıldığında rakibe bilgi verir ve oturumu kapatır.
         private synchronized void handleDisconnect(PlayerConnection disconnected) {
             if (!running) {
                 return;
@@ -268,6 +279,7 @@ public class Server {
             closeQuietly(black);
         }
 
+        // Güncel GameState bilgisini iki oyuncuya da gönderir.
         private void broadcastState() {
             String state = game.toStateMessage();
 
