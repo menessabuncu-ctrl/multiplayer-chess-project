@@ -5,8 +5,10 @@ import com.mycompany.GameLogic.*;
 import javax.swing.*;
 import java.awt.*;
 
+// Oyuna başlamadan önce server IP adresini alan giriş ekranı.
 public class StartScreen extends JFrame {
 
+    // IP alanı ve start butonu ile başlangıç arayüzünü hazırlar.
     public StartScreen() {
 
         setTitle("Multiplayer Chess");

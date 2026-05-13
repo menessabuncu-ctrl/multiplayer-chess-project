@@ -7,6 +7,7 @@ import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 
+// Oyun ekranını, durum etiketlerini ve ana kontrol butonlarını yöneten pencere.
 public class GameFrame extends JFrame {
     private final Client client;
     private final PieceColor role;
@@ -20,6 +21,7 @@ public class GameFrame extends JFrame {
     private boolean endScreenShown = false;
     private EndScreen endScreen;
 
+    // Oyuncu rengine göre oyun penceresini ve butonları oluşturur.
     public GameFrame(Client client, PieceColor role) {
         this.client = client;
         this.role = role;
@@ -74,6 +76,7 @@ public class GameFrame extends JFrame {
         setVisible(true);
     }
 
+    // Serverdan gelen STATE mesajını ayrıştırıp ekranı günceller.
     public void receiveState(String stateMessage) {
         String[] p = stateMessage.split("\\|", 8);
 
@@ -126,6 +129,7 @@ public class GameFrame extends JFrame {
                 || status == GameStatus.DISCONNECTED;
     }
 
+    // Oyun durumuna göre resign ve draw butonlarını aktif/pasif yapar.
     private void updateActionButtons(GameStatus status) {
         boolean active = !isGameOver(status);
 
@@ -135,6 +139,7 @@ public class GameFrame extends JFrame {
         declineDrawButton.setEnabled(active);
     }
 
+    // Rakip oyuncudan gelen replay teklifini kullanıcıya sorar.
     public void receiveReplayOffer(String requester) {
         if (endScreen != null) {
             endScreen.setReplayOfferReceived();
@@ -188,6 +193,7 @@ public class GameFrame extends JFrame {
         );
     }
 
+    // EndScreen açıksa rakip ayrıldığında replay butonunu kapatır.
     public void disableReplayBecauseOpponentLeft(String message) {
         statusLabel.setText(message);
 
@@ -215,6 +221,7 @@ public class GameFrame extends JFrame {
         endScreenShown = false;
     }
 
+    // Oyun devam ederken bağlantı koparsa kullanıcıyı bilgilendirir.
     public void showConnectionError(String message) {
         statusLabel.setText(message);
         board.setInteractionEnabled(false);

@@ -5,7 +5,9 @@ import com.mycompany.GameLogic.*;
 import javax.swing.*;
 import java.awt.*;
 
+// Satranç tahtasının görsel arayüzünü ve kare tıklamalarını yöneten panel.
 public class BoardPanel extends JPanel {
+    // Ekranda gösterilen güncel tahta durumu.
     private Piece[][] board = GameState.initialBoard();
     private final Client client;
     private final PieceColor role;
@@ -24,6 +26,7 @@ public class BoardPanel extends JPanel {
         refresh();
     }
 
+    // 8x8 tahta butonlarını oluşturur ve oyuncu rengine göre yönünü ayarlar.
     private void createBoard() {
         boolean whiteBottom = role == PieceColor.WHITE;
 
@@ -50,6 +53,7 @@ public class BoardPanel extends JPanel {
         }
     }
 
+    // Serverdan gelen yeni oyun durumunu panele uygular.
     public void setState(Piece[][] newBoard, PieceColor newTurn, GameStatus newStatus, String message) {
         this.board = newBoard;
         this.turn = newTurn;
@@ -70,6 +74,7 @@ public class BoardPanel extends JPanel {
         }
     }
 
+    // Oyuncunun kare seçimini, sıra kontrolünü ve hamle gönderimini yönetir.
     private void handleClick(int x, int y) {
         if (!interactionEnabled || isGameOver(status)) return;
         if (!Move.insideBoard(x, y)) return;
@@ -116,6 +121,7 @@ public class BoardPanel extends JPanel {
         }
     }
 
+    // Piyon son sıraya ulaşırsa terfi seçimini alıp hamleyi oluşturur.
     private Move buildMoveWithPromotionIfNeeded(int sx, int sy, int dx, int dy) {
         Piece piece = board[sy][sx];
         PieceType promotion = null;
@@ -141,6 +147,7 @@ public class BoardPanel extends JPanel {
         return new Move(sx, sy, dx, dy, promotion);
     }
 
+    // Tüm kareleri mevcut board dizisine göre yeniden çizer.
     private void refresh() {
         for (int y = 0; y < 8; y++) {
             for (int x = 0; x < 8; x++) {
@@ -149,6 +156,7 @@ public class BoardPanel extends JPanel {
         }
     }
 
+    // Tek bir kare üzerindeki renk ve taş sembolünü günceller.
     private void updateButton(JButton button, int x, int y) {
         Color light = new Color(240, 217, 181);
         Color dark = new Color(181, 136, 99);
@@ -175,6 +183,7 @@ public class BoardPanel extends JPanel {
         };
     }
 
+    // Seçili taşı ve temel olarak gidebileceği kareleri renklendirir.
     private void showSelectionAndPseudoLegalMoves(int x, int y) {
         buttons[y][x].setBackground(new Color(255, 220, 80));
         buttons[y][x].setBorder(BorderFactory.createLineBorder(Color.BLACK, 3));

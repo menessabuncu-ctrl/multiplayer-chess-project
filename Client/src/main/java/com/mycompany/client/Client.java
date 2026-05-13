@@ -6,6 +6,7 @@ import javax.swing.*;
 import java.io.*;
 import java.net.*;
 
+// Server ile haberleşen ve gelen mesajları GUI tarafına aktaran client sınıfı.
 public class Client {
     private Socket socket;
     private DataInputStream in;
@@ -14,6 +15,7 @@ public class Client {
     private PieceColor role;
     private volatile boolean closing = false;
 
+    // Servera bağlanır, oyuncu rolünü alır ve dinleme threadini başlatır.
     public Client(String ip) throws IOException {
         socket = new Socket(ip, 5000);
         socket.setKeepAlive(true);
@@ -35,6 +37,7 @@ public class Client {
         listener.start();
     }
 
+    // Serverdan gelen mesajları bağlantı açık kaldığı sürece dinler.
     private void listen() {
         try {
             while (!closing && socket != null && !socket.isClosed()) {
@@ -82,6 +85,7 @@ public class Client {
         }
     }
 
+    // Protokol mesajının tipine göre GUI üzerinde gerekli işlemi yapar.
     private void handleServerMessage(String message) {
         if (gameFrame == null) {
             return;
@@ -132,6 +136,7 @@ public class Client {
         return role;
     }
 
+    // Clienttan servera güvenli şekilde mesaj gönderir.
     public synchronized void send(String message) {
         try {
             if (closing) {
@@ -160,6 +165,7 @@ public class Client {
         }
     }
 
+    // Yapılan hamleyi serverın beklediği protokol formatında yollar.
     public void sendMove(Move move) {
         send("MOVE|" + move.sx + "|" + move.sy + "|" + move.dx + "|" + move.dy + "|" + (move.promotion == null ? "" : move.promotion.name()));
     }
@@ -192,6 +198,7 @@ public class Client {
         send("REPLAY_DECLINE");
     }
 
+    // Pencere kapandığında veya menüye dönüldüğünde socket bağlantısını kapatır.
     public void closeConnection() {
         closing = true;
 
@@ -217,6 +224,7 @@ public class Client {
         System.exit(0);
     }
 
+    // Server socketini açar ve gelen oyuncuları ikili oturumlara ayırır.
     public static void main(String[] args) {
         SwingUtilities.invokeLater(StartScreen::new);
     }
