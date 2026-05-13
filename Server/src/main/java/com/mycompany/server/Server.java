@@ -7,6 +7,7 @@ import java.net.*;
 
 public class Server {
     private static final int PORT = 5000;
+    private static int nextSessionId = 1;
 
     public static void main(String[] args) {
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
@@ -16,12 +17,20 @@ public class Server {
                 System.out.println("Waiting for players...");
 
                 Socket player1 = serverSocket.accept();
-                System.out.println("White connected: " + player1.getRemoteSocketAddress());
-
                 Socket player2 = serverSocket.accept();
-                System.out.println("Black connected: " + player2.getRemoteSocketAddress());
 
-                Thread session = new Thread(new GameSession(player1, player2), "game-session");
+                int sessionId = nextSessionId++;
+
+                System.out.println("[Session " + sessionId + "] White connected: " + player1.getRemoteSocketAddress());
+                System.out.println("[Session " + sessionId + "] Black connected: " + player2.getRemoteSocketAddress());
+
+                Thread session = new Thread(
+                        new GameSession(sessionId, player1, player2),
+                        "game-session-" + sessionId
+                );
+
+                System.out.println("[Session " + sessionId + "] Game session started.");
+
                 session.start();
             }
         } catch (IOException e) {
@@ -31,6 +40,8 @@ public class Server {
     }
 
     private static class GameSession implements Runnable {
+
+        private final int sessionId;
         private final PlayerConnection white;
         private final PlayerConnection black;
         private final GameState game = new GameState();
@@ -38,7 +49,8 @@ public class Server {
         private volatile boolean running = true;
         private PieceColor replayRequestedBy = null;
 
-        GameSession(Socket whiteSocket, Socket blackSocket) throws IOException {
+        GameSession(int sessionId, Socket whiteSocket, Socket blackSocket) throws IOException {
+            this.sessionId = sessionId;
             white = new PlayerConnection(whiteSocket, PieceColor.WHITE);
             black = new PlayerConnection(blackSocket, PieceColor.BLACK);
         }
@@ -60,12 +72,12 @@ public class Server {
                 t1.join();
                 t2.join();
             } catch (Exception e) {
-                System.err.println("Game session error: " + e.getMessage());
+                System.err.println("[Session " + sessionId + "] Game session error: " + e.getMessage());
                 e.printStackTrace();
             } finally {
                 closeQuietly(white);
                 closeQuietly(black);
-                System.out.println("Game session closed.");
+                System.out.println("[Session " + sessionId + "] Game session closed.");
             }
         }
 
@@ -78,7 +90,7 @@ public class Server {
             } catch (EOFException | SocketException e) {
                 handleDisconnect(player);
             } catch (Exception e) {
-                System.err.println(player.color + " listener error: " + e.getMessage());
+                System.err.println("[Session " + sessionId + "] " + player.color + " listener error: " + e.getMessage());
                 e.printStackTrace();
                 handleDisconnect(player);
             }
@@ -161,7 +173,7 @@ public class Server {
             } catch (Exception e) {
                 player.send("ERROR|Invalid message: " + GameState.escape(e.getMessage()));
 
-                System.err.println("Invalid client message from " + player.color + ": " + message);
+                System.err.println("[Session " + sessionId + "] Invalid client message from " + player.color + ": " + message);
                 e.printStackTrace();
             }
         }
@@ -232,7 +244,7 @@ public class Server {
                 return;
             }
 
-            System.out.println(disconnected.color + " disconnected.");
+            System.out.println("[Session " + sessionId + "] " + disconnected.color + " disconnected.");
 
             PlayerConnection opponent = opponentOf(disconnected);
 
